@@ -27,7 +27,6 @@ namespace ArcDimensionIssue
       ElementSet elements )
     {
       UIApplication uiApp = commandData.Application;
-      Autodesk.Revit.Creation.Application app = uiApp.Application.Create;
 
       string filename = Path.Combine( _folder, _template );
 
@@ -115,10 +114,10 @@ namespace ArcDimensionIssue
         Arc arc = Arc.Create( new XYZ( 0.0, 0.0, 0.0 ) + xOffset + yOffset,
           arcRadius, 0.0, 2 * Math.PI, XYZ.BasisZ, XYZ.BasisY.Negate() );
 
-        CurveArray curves = app.NewCurveArray();
+        CurveArray curves = new CurveArray();
         curves.Append( arc );
 
-        CurveArrArray profile = app.NewCurveArrArray();
+        CurveArrArray profile = new CurveArrArray();
         profile.Append( curves );
 
         Plane plane = new Plane( XYZ.BasisX.Negate(), arcCenter );
@@ -175,7 +174,7 @@ namespace ArcDimensionIssue
       return new FilteredElementCollector( doc )
         .OfClass( typeof( View ) )
         .Cast<View>()
-        .FirstOrDefault<View>( v
+        .FirstOrDefault<View>( v 
           => viewType == v.ViewType
           && v.RightDirection.IsAlmostEqualTo( rightDir )
           && v.UpDirection.IsAlmostEqualTo( upDir ) );
