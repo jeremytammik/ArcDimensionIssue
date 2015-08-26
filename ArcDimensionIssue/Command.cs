@@ -21,9 +21,9 @@ namespace ArcDimensionIssue
     const string _folder = "Z:/a/case/sfdc/10897796/attach";
     const string _template = "Metric Mechanical Equipment.rft";
 
-    public Result Execute( 
-      ExternalCommandData commandData, 
-      ref string message, 
+    public Result Execute(
+      ExternalCommandData commandData,
+      ref string message,
       ElementSet elements )
     {
       UIApplication uiApp = commandData.Application;
@@ -56,7 +56,7 @@ namespace ArcDimensionIssue
         //################## Reference planes ################################
 
         // Origin's reference planes
-        
+
         ReferencePlane referencePlaneOriginX = factory.NewReferencePlane(
           new XYZ( 1.0, 0.0, 0.0 ),
           new XYZ( 0.0, 0.0, 0.0 ),
@@ -88,7 +88,7 @@ namespace ArcDimensionIssue
         familyDoc.Regenerate();
 
         //################## Create dimensions ###############################
-        
+
         // Dimension x
 
         ReferenceArray refArrayX = new ReferenceArray();
@@ -162,23 +162,39 @@ namespace ArcDimensionIssue
       return Result.Succeeded;
     }
 
-    static View GetView( ViewType viewType, XYZ rightDir, XYZ upDir, Document familyDoc )
+    /// <summary>
+    /// Return the first view from the given document
+    /// matching the given view type, up and right direction.
+    /// </summary>
+    static View GetView(
+      ViewType viewType,
+      XYZ rightDir,
+      XYZ upDir,
+      Document doc )
     {
-      FilteredElementCollector collector = new FilteredElementCollector( familyDoc );
-      collector.WherePasses( new ElementClassFilter( typeof( View ) ) );
+      return new FilteredElementCollector( doc )
+        .OfClass( typeof( View ) )
+        .Cast<View>()
+        .FirstOrDefault<View>( v
+          => viewType == v.ViewType
+          && v.RightDirection.IsAlmostEqualTo( rightDir )
+          && v.UpDirection.IsAlmostEqualTo( upDir ) );
 
-      IEnumerable<View> views =
-        from View view in collector
-        where view.ViewType == viewType &&
-              view.RightDirection.IsAlmostEqualTo( rightDir ) &&
-              view.UpDirection.IsAlmostEqualTo( upDir )
-        select view;
+      //FilteredElementCollector collector = new FilteredElementCollector( doc );
+      //collector.WherePasses( new ElementClassFilter( typeof( View ) ) );
 
-      if( views.Count<View>() > 0 )
-      {
-        return views.First<View>();
-      }
-      return null;
+      //IEnumerable<View> views =
+      //  from View view in collector
+      //  where view.ViewType == viewType &&
+      //        view.RightDirection.IsAlmostEqualTo( rightDir ) &&
+      //        view.UpDirection.IsAlmostEqualTo( upDir )
+      //  select view;
+
+      //if( views.Count<View>() > 0 )
+      //{
+      //  return views.First<View>();
+      //}
+      //return null;
     }
   }
 }
