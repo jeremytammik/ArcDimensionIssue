@@ -1,12 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <RevitAddIns>
   <AddIn Type="Command">
-    <Text>Command ArcDimensionIssue</Text>
-    <Description>Some description for ArcDimensionIssue</Description>
+    <Text>Arc Dimension Issue</Text>
+    <Description>Test creation of dimension between arc and reference plane</Description>
     <Assembly>ArcDimensionIssue.dll</Assembly>
     <FullClassName>ArcDimensionIssue.Command</FullClassName>
     <ClientId>c2003162-5f88-4cc3-b828-75505e4e64c4</ClientId>
-    <VendorId>TBC_</VendorId>
+    <VendorId>com.typepad.thebuildingcoder</VendorId>
     <VendorDescription>The Building Coder, http://thebuildingcoder.typepad.com</VendorDescription>
   </AddIn>
 </RevitAddIns>

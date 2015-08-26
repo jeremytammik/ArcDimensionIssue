@@ -7,6 +7,7 @@ using Autodesk.Revit.ApplicationServices;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using System.IO;
 #endregion
 
 namespace ArcDimensionIssue
@@ -14,32 +15,105 @@ namespace ArcDimensionIssue
   [TransactionAttribute( TransactionMode.Manual )]
   public class Command : IExternalCommand
   {
-    public Result Execute(
-      ExternalCommandData commandData,
-      ref string message,
+    //const string _folder = "C:\\Temp\\ArcDimensionIssue";
+    //const string _template = "Metric Mechanical Equipment 16.rft";
+
+    const string _folder = "Z:/a/case/sfdc/10897796/attach";
+    const string _template = "Metric Mechanical Equipment.rft";
+
+    public Result Execute( 
+      ExternalCommandData commandData, 
+      ref string message, 
       ElementSet elements )
     {
       UIApplication uiApp = commandData.Application;
       Autodesk.Revit.Creation.Application app = uiApp.Application.Create;
 
-      Document familyDoc = uiApp.Application.NewFamilyDocument(
-        "Z:/a/case/sfdc/10897796/attach/Metric Mechanical Equipment.rft" );
+      string filename = Path.Combine( _folder, _template );
 
-      //View view = getView(familyDocument);
+      Document familyDoc = uiApp.Application.NewFamilyDocument( filename );
 
       Family family = familyDoc.OwnerFamily;
       Autodesk.Revit.Creation.FamilyItemFactory factory = familyDoc.FamilyCreate;
       Extrusion extrusion = null;
-
-      // Create an extrusion
 
       using( Transaction trans = new Transaction( familyDoc ) )
       {
         trans.Start( "Create Extrusion" );
 
         XYZ arcCenter = new XYZ( 0.0, 3.0, -2.0 );
+
+        // Get the "left" view
+
+        View view = GetView( ViewType.Elevation, XYZ.BasisY.Negate(),
+          XYZ.BasisZ, familyDoc );
+
+        // 2D offsets from view 'left'
+
+        XYZ xOffset = new XYZ( 0.0, 10.0, 0.0 );
+        XYZ yOffset = new XYZ( 0.0, 0.0, -10.0 );
+
+        //################## Reference planes ################################
+
+        // Origin's reference planes
+        
+        ReferencePlane referencePlaneOriginX = factory.NewReferencePlane(
+          new XYZ( 1.0, 0.0, 0.0 ),
+          new XYZ( 0.0, 0.0, 0.0 ),
+          new XYZ( 0.0, 1.0, 0.0 ), view );
+        referencePlaneOriginX.Name = "ReferencePlane_OriginX";
+        referencePlaneOriginX.Pinned = true;
+
+        ReferencePlane referencePlaneOriginY = factory.NewReferencePlane(
+          new XYZ( 0.0, 0.0, 1.0 ),
+          new XYZ( 0.0, 0.0, 0.0 ),
+          new XYZ( -1.0, 0.0, 0.0 ), view );
+        referencePlaneOriginY.Name = "ReferencePlane_OriginY";
+        referencePlaneOriginY.Pinned = true;
+
+        // Reference planes the extruded arc should stick to
+
+        ReferencePlane referencePlaneX = factory.NewReferencePlane(
+          new XYZ( 1.0, 0.0, 0.0 ) + yOffset,
+          new XYZ( 0.0, 0.0, 0.0 ) + yOffset,
+          new XYZ( 0.0, 1.0, 0.0 ), view );
+        referencePlaneX.Name = "ReferencePlane_X";
+
+        ReferencePlane referencePlaneY = factory.NewReferencePlane(
+          new XYZ( 0.0, 0.0, 1.0 ) + xOffset,
+          new XYZ( 0.0, 0.0, 0.0 ) + xOffset,
+          new XYZ( -1.0, 0.0, 0.0 ), view );
+        referencePlaneY.Name = "ReferencePlane_Y";
+
+        familyDoc.Regenerate();
+
+        //################## Create dimensions ###############################
+        
+        // Dimension x
+
+        ReferenceArray refArrayX = new ReferenceArray();
+        refArrayX.Append( referencePlaneX.GetReference() );
+        refArrayX.Append( referencePlaneOriginX.GetReference() );
+
+        Line lineX = Line.CreateUnbound( arcCenter, XYZ.BasisZ );
+        Dimension dimensionX = factory.NewDimension( view, lineX, refArrayX );
+
+        // Dimension y
+
+        ReferenceArray refArrayY = new ReferenceArray();
+        refArrayY.Append( referencePlaneY.GetReference() );
+        refArrayY.Append( referencePlaneOriginY.GetReference() );
+
+        Line lineY = Line.CreateUnbound( arcCenter, XYZ.BasisY );
+        Dimension dimensionY = factory.NewDimension( view, lineY, refArrayY );
+
+        familyDoc.Regenerate();
+
+        //################## Create arc ######################################
+
         double arcRadius = 1.0;
-        Arc arc = Arc.Create( arcCenter, arcRadius, 0.0, 2 * Math.PI, XYZ.BasisZ, XYZ.BasisY.Negate() );
+        Arc arc = Arc.Create( new XYZ( 0.0, 0.0, 0.0 ) + xOffset + yOffset,
+          arcRadius, 0.0, 2 * Math.PI, XYZ.BasisZ, XYZ.BasisY.Negate() );
 
         CurveArray curves = app.NewCurveArray();
         curves.Append( arc );
@@ -55,78 +129,35 @@ namespace ArcDimensionIssue
         Debug.WriteLine( "YVec:   " + sketchPlane.GetPlane().YVec );
         extrusion = factory.NewExtrusion( true, profile, sketchPlane, 10 );
 
-        //familyDoc.Regenerate(); // this is done by Commit anyway
+        familyDoc.Regenerate();
+
+        //################## Add family parameters ###########################
+
+        FamilyParameter paramX = familyDoc.FamilyManager.AddParameter( "X",
+          BuiltInParameterGroup.PG_GEOMETRY, ParameterType.Length, true );
+        dimensionX.FamilyLabel = paramX;
+
+        FamilyParameter paramY = familyDoc.FamilyManager.AddParameter( "Y",
+          BuiltInParameterGroup.PG_GEOMETRY, ParameterType.Length, true );
+        dimensionY.FamilyLabel = paramY;
+
+        // Set their values
+
+        FamilyType familyType = familyDoc.FamilyManager.NewType( "Standard" );
+        familyDoc.FamilyManager.Set( paramX, 10 );
+        familyDoc.FamilyManager.Set( paramY, 10 );
 
         trans.Commit();
       }
 
-      // Create dimension 
+      // Save it to inspect
 
-      using( Transaction trans = new Transaction( familyDoc ) )
-      {
-        trans.Start( "Create Dimension" );
-
-        // the arc's reference from creating the extrusion 
-        // is null at this point, so I retrieve it from 
-        // the sketch's profile again
-
-        Arc arc = null;
-        foreach( CurveArray curArr in extrusion.Sketch.Profile )
-        {
-          foreach( Curve curCurve in curArr )
-          {
-            arc = curCurve as Arc;
-            break;
-          }
-        }
-
-        View view = GetView( ViewType.Elevation, XYZ.BasisY.Negate(),
-          XYZ.BasisZ, familyDoc );
-
-        ReferencePlane referencePlane = factory.NewReferencePlane(
-          new XYZ( 1.0, 0.0, -2.0 ), new XYZ( 0.0, 0.0, -2.0 ),
-          new XYZ( 0.0, 1.0, -2.0 ), view );
-
-        ReferenceArray refArray = new ReferenceArray();
-        refArray.Append( referencePlane.GetReference() );
-        refArray.Append( arc.Reference );
-
-        Line line = Line.CreateUnbound( arc.Center, XYZ.BasisZ );
-
-#if DEBUG
-        // Display arc from cylinder
-
-        ModelCurve marc = factory.NewModelCurve( arc, extrusion.Sketch.SketchPlane );
-        
-        // Display X and Y lines on reference plane
-        
-        Plane plane = referencePlane.GetPlane();
-        SketchPlane sp = SketchPlane.Create( familyDoc, plane );
-        XYZ origin = plane.Origin;
-        Line linex = Line.CreateBound( origin, origin + plane.XVec );
-        ModelCurve mlinex = factory.NewModelCurve( linex, sp );
-        Line liney = Line.CreateBound( origin, origin + plane.YVec );
-        ModelCurve mliney = factory.NewModelCurve( liney, sp );
-
-        bool create_dimension = false;
-        if( create_dimension )
-        {
-          Dimension dimension = factory.NewDimension( view, line, refArray );
-        }
-#else
-        Dimension dimension = factory.NewDimension( view, line, refArray );
-#endif // DEBUG
-
-        //familyDoc.Regenerate(); // this is done by Commit anyway
-
-        trans.Commit();
-      }
-
-#if DEBUG
       SaveAsOptions opt = new SaveAsOptions();
       opt.OverwriteExistingFile = true;
-      familyDoc.SaveAs( "Z:/a/case/sfdc/10897796/attach/test.rfa", opt );
-#endif // DEBUG
+
+      filename = Path.Combine( Path.GetTempPath(), "test.rfa" );
+
+      familyDoc.SaveAs( filename, opt );
 
       return Result.Succeeded;
     }
