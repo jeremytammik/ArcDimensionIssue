@@ -26,17 +26,21 @@ namespace ArcDimensionIssue
       ref string message,
       ElementSet elements )
     {
-      UIApplication uiApp = commandData.Application;
+      Application app = commandData.Application.Application;
 
       string filename = Path.Combine( _folder, _template );
 
-      Document familyDoc = uiApp.Application.NewFamilyDocument( filename );
+      Document familyDoc = app.NewFamilyDocument( filename );
 
       Family family = familyDoc.OwnerFamily;
-      Autodesk.Revit.Creation.FamilyItemFactory factory = familyDoc.FamilyCreate;
+
+      Autodesk.Revit.Creation.FamilyItemFactory factory
+        = familyDoc.FamilyCreate;
+
       Extrusion extrusion = null;
 
-      using( Transaction trans = new Transaction( familyDoc ) )
+      using( Transaction trans = new Transaction( 
+        familyDoc ) )
       {
         trans.Start( "Create Extrusion" );
 
@@ -44,8 +48,8 @@ namespace ArcDimensionIssue
 
         // Get the "left" view
 
-        View view = GetView( ViewType.Elevation, XYZ.BasisY.Negate(),
-          XYZ.BasisZ, familyDoc );
+        View view = GetView( ViewType.Elevation, 
+          XYZ.BasisY.Negate(), XYZ.BasisZ, familyDoc );
 
         // 2D offsets from view 'left'
 
@@ -56,32 +60,34 @@ namespace ArcDimensionIssue
 
         // Origin's reference planes
 
-        ReferencePlane referencePlaneOriginX = factory.NewReferencePlane(
-          new XYZ( 1.0, 0.0, 0.0 ),
-          new XYZ( 0.0, 0.0, 0.0 ),
-          new XYZ( 0.0, 1.0, 0.0 ), view );
+        ReferencePlane referencePlaneOriginX 
+          = factory.NewReferencePlane( XYZ.BasisX, 
+            XYZ.Zero, XYZ.BasisY, view );
+
         referencePlaneOriginX.Name = "ReferencePlane_OriginX";
         referencePlaneOriginX.Pinned = true;
 
-        ReferencePlane referencePlaneOriginY = factory.NewReferencePlane(
-          new XYZ( 0.0, 0.0, 1.0 ),
-          new XYZ( 0.0, 0.0, 0.0 ),
-          new XYZ( -1.0, 0.0, 0.0 ), view );
+        ReferencePlane referencePlaneOriginY 
+          = factory.NewReferencePlane( XYZ.BasisZ, 
+            XYZ.Zero, -XYZ.BasisX, view );
+
         referencePlaneOriginY.Name = "ReferencePlane_OriginY";
         referencePlaneOriginY.Pinned = true;
 
         // Reference planes the extruded arc should stick to
 
-        ReferencePlane referencePlaneX = factory.NewReferencePlane(
-          new XYZ( 1.0, 0.0, 0.0 ) + yOffset,
-          new XYZ( 0.0, 0.0, 0.0 ) + yOffset,
-          new XYZ( 0.0, 1.0, 0.0 ), view );
+        ReferencePlane referencePlaneX 
+          = factory.NewReferencePlane(
+            XYZ.BasisX + yOffset,
+            XYZ.Zero + yOffset,
+            XYZ.BasisY, view );
         referencePlaneX.Name = "ReferencePlane_X";
 
-        ReferencePlane referencePlaneY = factory.NewReferencePlane(
-          new XYZ( 0.0, 0.0, 1.0 ) + xOffset,
-          new XYZ( 0.0, 0.0, 0.0 ) + xOffset,
-          new XYZ( -1.0, 0.0, 0.0 ), view );
+        ReferencePlane referencePlaneY 
+          = factory.NewReferencePlane(
+            XYZ.BasisZ + xOffset,
+            XYZ.Zero + xOffset,
+            -XYZ.BasisX, view );
         referencePlaneY.Name = "ReferencePlane_Y";
 
         familyDoc.Regenerate();
@@ -95,7 +101,8 @@ namespace ArcDimensionIssue
         refArrayX.Append( referencePlaneOriginX.GetReference() );
 
         Line lineX = Line.CreateUnbound( arcCenter, XYZ.BasisZ );
-        Dimension dimensionX = factory.NewDimension( view, lineX, refArrayX );
+        Dimension dimensionX = factory.NewDimension( 
+          view, lineX, refArrayX );
 
         // Dimension y
 
@@ -104,15 +111,19 @@ namespace ArcDimensionIssue
         refArrayY.Append( referencePlaneOriginY.GetReference() );
 
         Line lineY = Line.CreateUnbound( arcCenter, XYZ.BasisY );
-        Dimension dimensionY = factory.NewDimension( view, lineY, refArrayY );
+        Dimension dimensionY = factory.NewDimension( 
+          view, lineY, refArrayY );
 
         familyDoc.Regenerate();
 
         //################## Create arc ######################################
 
         double arcRadius = 1.0;
-        Arc arc = Arc.Create( new XYZ( 0.0, 0.0, 0.0 ) + xOffset + yOffset,
-          arcRadius, 0.0, 2 * Math.PI, XYZ.BasisZ, XYZ.BasisY.Negate() );
+
+        Arc arc = Arc.Create( 
+          XYZ.Zero + xOffset + yOffset,
+          arcRadius, 0.0, 2 * Math.PI, 
+          XYZ.BasisZ, XYZ.BasisY.Negate() );
 
         CurveArray curves = new CurveArray();
         curves.Append( arc );
@@ -120,31 +131,43 @@ namespace ArcDimensionIssue
         CurveArrArray profile = new CurveArrArray();
         profile.Append( curves );
 
-        Plane plane = new Plane( XYZ.BasisX.Negate(), arcCenter );
-        SketchPlane sketchPlane = SketchPlane.Create( familyDoc, plane );
+        Plane plane = new Plane( XYZ.BasisX.Negate(), 
+          arcCenter );
+
+        SketchPlane sketchPlane = SketchPlane.Create( 
+          familyDoc, plane );
+
         Debug.WriteLine( "Origin: " + sketchPlane.GetPlane().Origin );
         Debug.WriteLine( "Normal: " + sketchPlane.GetPlane().Normal );
         Debug.WriteLine( "XVec:   " + sketchPlane.GetPlane().XVec );
         Debug.WriteLine( "YVec:   " + sketchPlane.GetPlane().YVec );
-        extrusion = factory.NewExtrusion( true, profile, sketchPlane, 10 );
+        
+        extrusion = factory.NewExtrusion( true, 
+          profile, sketchPlane, 10 );
 
         familyDoc.Regenerate();
 
         //################## Add family parameters ###########################
 
-        FamilyParameter paramX = familyDoc.FamilyManager.AddParameter( "X",
-          BuiltInParameterGroup.PG_GEOMETRY, ParameterType.Length, true );
+        FamilyManager fmgr = familyDoc.FamilyManager;
+
+        FamilyParameter paramX = fmgr.AddParameter( "X",
+          BuiltInParameterGroup.PG_GEOMETRY, 
+          ParameterType.Length, true );
         dimensionX.FamilyLabel = paramX;
 
-        FamilyParameter paramY = familyDoc.FamilyManager.AddParameter( "Y",
-          BuiltInParameterGroup.PG_GEOMETRY, ParameterType.Length, true );
+        FamilyParameter paramY = fmgr.AddParameter( "Y",
+          BuiltInParameterGroup.PG_GEOMETRY, 
+          ParameterType.Length, true );
         dimensionY.FamilyLabel = paramY;
 
         // Set their values
 
-        FamilyType familyType = familyDoc.FamilyManager.NewType( "Standard" );
-        familyDoc.FamilyManager.Set( paramX, 10 );
-        familyDoc.FamilyManager.Set( paramY, 10 );
+        FamilyType familyType = fmgr.NewType( 
+          "Standard" );
+
+        fmgr.Set( paramX, 10 );
+        fmgr.Set( paramY, 10 );
 
         trans.Commit();
       }
@@ -154,7 +177,8 @@ namespace ArcDimensionIssue
       SaveAsOptions opt = new SaveAsOptions();
       opt.OverwriteExistingFile = true;
 
-      filename = Path.Combine( Path.GetTempPath(), "test.rfa" );
+      filename = Path.Combine( Path.GetTempPath(), 
+        "test.rfa" );
 
       familyDoc.SaveAs( filename, opt );
 
